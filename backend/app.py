@@ -1556,6 +1556,53 @@ def qr_admin_orders():
     return ok({"orders": orders, "status_flow": QR_STATUSES})
 
 
+@app.route("/api/qr-ordering/pulse", methods=["GET"])
+@login_required
+def qr_admin_pulse():
+    """Lightweight poll for the global new-order alerts and the sidebar badge.
+    Returns the current NEW / active counts and any orders newer than `after`."""
+    try:
+        after = int(request.args.get("after") or 0)
+    except (TypeError, ValueError):
+        after = 0
+
+    conn = get_db()
+    latest = conn.execute("SELECT COALESCE(MAX(id), 0) AS m FROM qr_orders").fetchone()["m"]
+    new_count = conn.execute(
+        "SELECT COUNT(*) AS c FROM qr_orders WHERE status = 'NEW'"
+    ).fetchone()["c"]
+    active_count = conn.execute(
+        "SELECT COUNT(*) AS c FROM qr_orders WHERE status NOT IN ('SERVED', 'CANCELLED')"
+    ).fetchone()["c"]
+
+    arrived = []
+    if after:
+        rows = conn.execute(
+            """SELECT qo.id, qo.order_no, qo.grand_total, rt.table_no,
+                      (SELECT COALESCE(SUM(qty), 0) FROM qr_order_items qi WHERE qi.qr_order_id = qo.id) AS item_count
+               FROM qr_orders qo JOIN restaurant_tables rt ON rt.id = qo.table_id
+               WHERE qo.id > ? ORDER BY qo.id""",
+            (after,),
+        ).fetchall()
+        arrived = [
+            {
+                "id": r["id"],
+                "order_no": r["order_no"],
+                "table_label": r["table_no"],
+                "grand_total": round(float(r["grand_total"] or 0), 2),
+                "item_count": int(r["item_count"] or 0),
+            }
+            for r in rows
+        ]
+    conn.close()
+    return ok({
+        "latest_id": latest,
+        "new_count": new_count,
+        "active_count": active_count,
+        "new": arrived,
+    })
+
+
 @app.route("/api/qr-ordering/orders/<int:order_id>/status", methods=["POST"])
 @login_required
 def qr_admin_set_status(order_id):

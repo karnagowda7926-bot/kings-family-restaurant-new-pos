@@ -117,7 +117,10 @@ function renderSidebar(activeKey, user) {
       ${item("menu", "menu.html", "Menu Studio", "menu")}
       <div class="nav-section">QR Ordering</div>
       ${item("qr-tables", "qr-tables.html", "Tables & QR Codes", "qr")}
-      ${item("qr-orders", "qr-orders.html", "Live Orders", "orders")}`;
+      <a href="qr-orders.html" class="${activeKey === "qr-orders" ? "active" : ""}" title="Live Orders">
+        <span class="icon">${navIcon("orders")}</span><span class="label">Live Orders</span>
+        <span class="nav-badge" id="qrOrdersBadge" hidden></span>
+      </a>`;
 
   const ownerNav = `
       <div class="nav-section">Overview</div>
@@ -150,6 +153,112 @@ function renderSidebar(activeKey, user) {
     const initial = String(user.username || "A").slice(0, 1).toUpperCase();
     chip.innerHTML = `<span class="avatar">${escapeHtml(initial)}</span><span><strong>${escapeHtml(user.username)}</strong><small>${escapeHtml(user.role || "Owner")}</small></span>`;
   }
+
+  startOrderAlerts(user);
+}
+
+/* =========================================================
+   Global QR new-order alerts — chime + on-screen prompt on ANY page,
+   plus a live count badge on the sidebar "Live Orders" item.
+   ========================================================= */
+
+let _kfAlertsStarted = false;
+let _kfSeenOrderId = 0;
+let _kfAlertAudio = null;
+let _kfAlertTimer = null;
+
+function _kfSoundOn() {
+  try { return localStorage.getItem("kf_qr_sound") !== "off"; } catch (e) { return true; }
+}
+function _kfUnlockAudio() {
+  try {
+    if (!_kfAlertAudio) _kfAlertAudio = new (window.AudioContext || window.webkitAudioContext)();
+    if (_kfAlertAudio.state === "suspended") _kfAlertAudio.resume();
+  } catch (e) { /* no audio */ }
+}
+function _kfChime() {
+  if (!_kfSoundOn()) return;
+  _kfUnlockAudio();
+  if (!_kfAlertAudio) return;
+  const t0 = _kfAlertAudio.currentTime;
+  [[880, 0], [1174, 0.13], [1568, 0.26]].forEach(([f, at]) => {
+    const o = _kfAlertAudio.createOscillator();
+    const g = _kfAlertAudio.createGain();
+    o.type = "sine";
+    o.frequency.value = f;
+    g.gain.setValueAtTime(0.0001, t0 + at);
+    g.gain.exponentialRampToValueAtTime(0.4, t0 + at + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + at + 0.4);
+    o.connect(g); g.connect(_kfAlertAudio.destination);
+    o.start(t0 + at); o.stop(t0 + at + 0.42);
+  });
+}
+
+function _kfSetOrdersBadge(n) {
+  const el = document.getElementById("qrOrdersBadge");
+  if (!el) return;
+  if (n > 0) { el.textContent = n > 99 ? "99+" : String(n); el.hidden = false; }
+  else { el.hidden = true; }
+}
+
+function _kfShowOrderPrompt(message) {
+  let bar = document.getElementById("kfOrderPrompt");
+  if (!bar) {
+    bar = document.createElement("div");
+    bar.id = "kfOrderPrompt";
+    bar.className = "kf-order-prompt";
+    bar.addEventListener("click", () => { window.location.href = "qr-orders.html"; });
+    document.body.appendChild(bar);
+  }
+  bar.innerHTML = `<span class="kf-op-bell">🔔</span><span>${escapeHtml(message)}</span><span class="kf-op-go">View →</span>`;
+  bar.classList.add("show");
+  clearTimeout(bar._t);
+  bar._t = setTimeout(() => bar.classList.remove("show"), 9000);
+}
+
+function startOrderAlerts(user) {
+  if (_kfAlertsStarted) return;
+  if (!user || user.role === "owner") return;                     // owner is view-only
+  if (location.pathname.endsWith("login.html")) return;
+  _kfAlertsStarted = true;
+
+  const onLiveOrdersPage = location.pathname.endsWith("qr-orders.html");
+  try { _kfSeenOrderId = Number(localStorage.getItem("kf_qr_seen_id") || 0); } catch (e) { _kfSeenOrderId = 0; }
+  document.addEventListener("click", _kfUnlockAudio, { once: true });
+
+  const tick = async () => {
+    if (document.hidden) return;
+    let data;
+    try {
+      data = await apiFetch("/qr-ordering/pulse?after=" + (_kfSeenOrderId || 0));
+    } catch (e) { return; }
+
+    _kfSetOrdersBadge(data.new_count || 0);
+
+    const fresh = data.new || [];
+    if (!_kfSeenOrderId) {                    // first run on this device — seed silently
+      _kfSeenOrderId = data.latest_id || 0;
+      try { localStorage.setItem("kf_qr_seen_id", String(_kfSeenOrderId)); } catch (e) { /* ignore */ }
+      return;
+    }
+    if (fresh.length && !onLiveOrdersPage) {  // the Live Orders page runs its own richer alert
+      _kfChime();
+      if (fresh.length === 1) {
+        const o = fresh[0];
+        _kfShowOrderPrompt(`Order received · ${o.table_label} · ${o.order_no} · ${formatMoney(o.grand_total)}`);
+      } else {
+        _kfShowOrderPrompt(`${fresh.length} new orders received`);
+      }
+    }
+    if (data.latest_id && data.latest_id !== _kfSeenOrderId) {
+      _kfSeenOrderId = data.latest_id;
+      try { localStorage.setItem("kf_qr_seen_id", String(_kfSeenOrderId)); } catch (e) { /* ignore */ }
+    }
+  };
+
+  tick();
+  _kfAlertTimer = setInterval(tick, 12000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) tick(); });
 }
 
 function confirmLogout(onConfirm) {
