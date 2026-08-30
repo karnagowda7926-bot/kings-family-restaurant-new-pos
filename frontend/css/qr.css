@@ -57,6 +57,13 @@
   background: var(--surface, #fff);
   display: flex; flex-direction: column; gap: 10px;
 }
+.order-card.is-fresh { animation: ocArrive 1.8s cubic-bezier(.22,1,.32,1) 1; }
+@keyframes ocArrive {
+  0%   { box-shadow: 0 0 0 0 rgba(245,158,11,.55); background: #fff8ec; transform: scale(1.015); }
+  60%  { box-shadow: 0 0 0 12px rgba(245,158,11,0); background: #fffdf6; transform: none; }
+  100% { box-shadow: 0 0 0 0 rgba(245,158,11,0); background: #fff; }
+}
+
 .order-card[data-status="NEW"]       { border-left-color: #f59e0b; }
 .order-card[data-status="ACCEPTED"]  { border-left-color: #3b82f6; }
 .order-card[data-status="PREPARING"] { border-left-color: #8b5cf6; }
