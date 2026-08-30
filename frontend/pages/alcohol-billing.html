@@ -65,8 +65,14 @@
 
           <div class="cart-fields">
             <div class="field">
-              <label>Discount (₹)</label>
-              <input type="number" id="discountInput" value="0" min="0" />
+              <label>Discount</label>
+              <div class="discount-row">
+                <input type="number" id="discountInput" value="0" min="0" />
+                <select id="discountMode" aria-label="Discount unit">
+                  <option value="rupee">₹</option>
+                  <option value="percent">%</option>
+                </select>
+              </div>
             </div>
             <div class="field">
               <label>Payment Method</label>
@@ -81,7 +87,7 @@
           <div class="totals-box">
             <div class="t-row"><span>Subtotal</span><span id="tSubtotal">₹0.00</span></div>
             <div class="t-row"><span>Tax</span><span id="tTax">₹0.00</span></div>
-            <div class="t-row"><span>Discount</span><span id="tDiscount">− ₹0.00</span></div>
+            <div class="t-row"><span id="tDiscountLabel">Discount</span><span id="tDiscount">− ₹0.00</span></div>
             <div class="t-row grand"><span>Grand Total</span><span id="tGrandTotal">₹0.00</span></div>
           </div>
 

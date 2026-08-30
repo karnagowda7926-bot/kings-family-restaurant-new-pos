@@ -300,6 +300,30 @@ function formatMoney(n) {
   return "₹" + num.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+/* Discount entered as ₹ or % (selector #discountMode), converted to a rupee
+   amount capped at the subtotal. Shared by food + bar billing. */
+function computeDiscountAmount(subtotal) {
+  const raw = Number(document.getElementById("discountInput")?.value) || 0;
+  const mode = document.getElementById("discountMode")?.value || "rupee";
+  let amt = mode === "percent" ? (subtotal * raw) / 100 : raw;
+  amt = Math.max(0, Math.min(Number(subtotal) || 0, amt));
+  return Math.round(amt * 100) / 100;
+}
+function discountRowLabel() {
+  const raw = Number(document.getElementById("discountInput")?.value) || 0;
+  const mode = document.getElementById("discountMode")?.value || "rupee";
+  return mode === "percent" && raw ? `Discount (${raw}%)` : "Discount";
+}
+function setupDiscountMode(onChange) {
+  const sel = document.getElementById("discountMode");
+  if (!sel) return;
+  try { const m = localStorage.getItem("kf_discount_mode"); if (m) sel.value = m; } catch (e) { /* ignore */ }
+  sel.addEventListener("change", () => {
+    try { localStorage.setItem("kf_discount_mode", sel.value); } catch (e) { /* ignore */ }
+    if (onChange) onChange();
+  });
+}
+
 function escapeHtml(str) {
   if (str === null || str === undefined) return "";
   return String(str)

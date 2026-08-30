@@ -217,7 +217,7 @@
     const subtotal = CART.reduce((sum, item) => sum + item.price * item.qty, 0);
     const taxPercent = currentTaxPercent();
     const tax = subtotal * (taxPercent / 100);
-    const discount = Number(document.getElementById("discountInput").value) || 0;
+    const discount = computeDiscountAmount(subtotal);
     return { subtotal: Math.round(subtotal * 100) / 100, tax: Math.round(tax * 100) / 100, taxPercent, discount, grandTotal: Math.max(0, Math.round((subtotal + tax - discount) * 100) / 100) };
   }
 
@@ -226,6 +226,7 @@
     document.getElementById("tSubtotal").textContent = formatMoney(totals.subtotal);
     document.getElementById("tTaxLabel").textContent = `Tax (${totals.taxPercent}%)`;
     document.getElementById("tTax").textContent = formatMoney(totals.tax);
+    document.getElementById("tDiscountLabel").textContent = discountRowLabel();
     document.getElementById("tDiscount").textContent = "− " + formatMoney(totals.discount);
     document.getElementById("tGrandTotal").textContent = formatMoney(totals.grandTotal);
     document.getElementById("confirmBillBtn").disabled = CART.length === 0;
@@ -233,6 +234,7 @@
   }
 
   document.getElementById("discountInput").addEventListener("input", () => { updateTotals(); scheduleSessionSave(); });
+  setupDiscountMode(() => { updateTotals(); scheduleSessionSave(); });
   document.getElementById("clearCartBtn").addEventListener("click", () => { CART = []; renderCart(); scheduleSessionSave(); });
 
   // Tax (%): prefill from the saved default, and persist any change so it
@@ -286,14 +288,14 @@
     try {
       if (ACTIVE_TABLE) {
         const snapshot = await apiFetch(`/table-sessions/${ACTIVE_TABLE.id}`);
-        const settled = await apiFetch(`/table-sessions/${ACTIVE_TABLE.id}/settle`, { method: "POST", body: { payment_method: paymentMethod, discount: Number(document.getElementById("discountInput").value) || 0 } });
+        const settled = await apiFetch(`/table-sessions/${ACTIVE_TABLE.id}/settle`, { method: "POST", body: { payment_method: paymentMethod, discount: computeTotals().discount } });
         if (doPrint) printTableReceipt(snapshot, settled);
         showToast(`${settled.table_no} settled successfully`);
         ACTIVE_TABLE = null;
         CART = [];
         await loadTables();
       } else {
-        const bill = await apiFetch("/food/bills", { method: "POST", body: { customer_name: document.getElementById("customerName").value.trim(), customer_phone: document.getElementById("customerPhone").value.trim(), items: CART, discount: Number(document.getElementById("discountInput").value) || 0, tax_percent: currentTaxPercent(), payment_method: paymentMethod } });
+        const bill = await apiFetch("/food/bills", { method: "POST", body: { customer_name: document.getElementById("customerName").value.trim(), customer_phone: document.getElementById("customerPhone").value.trim(), items: CART, discount: computeTotals().discount, tax_percent: currentTaxPercent(), payment_method: paymentMethod } });
         showToast(`Bill ${bill.bill_no} confirmed`);
         if (doPrint) printReceipt(bill);
       }

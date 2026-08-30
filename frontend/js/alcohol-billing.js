@@ -156,7 +156,7 @@
   function computeTotals() {
     const subtotal = CART.reduce((s, c) => s + c.price * c.qty, 0);
     const tax = CART.reduce((s, c) => s + (c.price * c.qty * c.tax_rate / 100), 0);
-    const discount = Number(document.getElementById("discountInput").value) || 0;
+    const discount = computeDiscountAmount(subtotal);
     const grandTotal = Math.max(0, subtotal + tax - discount);
     return {
       subtotal: Math.round(subtotal * 100) / 100,
@@ -170,11 +170,13 @@
     const t = computeTotals();
     document.getElementById("tSubtotal").textContent = formatMoney(t.subtotal);
     document.getElementById("tTax").textContent = formatMoney(t.tax);
+    document.getElementById("tDiscountLabel").textContent = discountRowLabel();
     document.getElementById("tDiscount").textContent = "− " + formatMoney(t.discount);
     document.getElementById("tGrandTotal").textContent = formatMoney(t.grandTotal);
     document.getElementById("confirmBillBtn").disabled = CART.length === 0;
   }
   document.getElementById("discountInput").addEventListener("input", updateTotals);
+  setupDiscountMode(updateTotals);
 
   document.getElementById("clearCartBtn").addEventListener("click", () => {
     CART = [];
@@ -234,7 +236,7 @@
       customer_name: document.getElementById("customerName").value.trim(),
       customer_phone: document.getElementById("customerPhone").value.trim(),
       items: CART,
-      discount: Number(document.getElementById("discountInput").value) || 0,
+      discount: computeTotals().discount,
       payment_method: document.getElementById("paymentMethod").value,
     };
 
@@ -244,7 +246,7 @@
         const existing = (snapshot.items || []).map(item => ({ name: item.item_name, price: Number(item.price), qty: Number(item.qty), item_kind: item.item_kind, brand: item.brand || "", bottle_size: item.bottle_size || "", tax_rate: Number(item.tax_rate || 5) }));
         const merged = [...existing, ...CART];
         await apiFetch(`/table-sessions/${TARGET_SESSION_ID}`, { method: "PUT", body: { customer_name: customerName, customer_phone: customerPhone, items: merged } });
-        const settled = await apiFetch(`/table-sessions/${TARGET_SESSION_ID}/settle`, { method: "POST", body: { payment_method: paymentMethod, discount: Number(document.getElementById("discountInput").value) || 0 } });
+        const settled = await apiFetch(`/table-sessions/${TARGET_SESSION_ID}/settle`, { method: "POST", body: { payment_method: paymentMethod, discount: computeTotals().discount } });
         if (doPrint) printReceipt({ bill_no: `${settled.table_no} · TABLE BILL`, created_at: new Date().toLocaleString(), customer_name: customerName, customer_phone: customerPhone, payment_method: settled.payment_method, items: merged.map(item => ({ item_name: item.name, qty: item.qty, line_total: item.price * item.qty })), subtotal: settled.subtotal, tax: settled.tax, discount: settled.discount, grand_total: settled.grand_total });
         showToast(`${settled.table_no} settled successfully`);
         TARGET_SESSION_ID = "";

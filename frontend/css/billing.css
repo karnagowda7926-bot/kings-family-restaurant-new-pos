@@ -6,3 +6,7 @@
 .item-card-image img.image-fallback,.admin-card-image img.image-fallback{filter:saturate(.72)}
 
 .cart-fields .field-hint{display:block;font-size:9px;color:var(--muted);margin-top:4px;line-height:1.3}
+
+.cart-fields .discount-row{display:flex;gap:6px}
+.cart-fields .discount-row input{flex:1;min-width:0}
+.cart-fields .discount-row select{width:52px;flex-shrink:0;padding-left:8px;padding-right:4px}
