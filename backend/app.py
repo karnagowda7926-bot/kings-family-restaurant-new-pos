@@ -1108,7 +1108,7 @@ def dashboard():
     ).fetchone()
 
     trend_rows = conn.execute(
-        """SELECT day, ROUND(SUM(total), 2) AS total, SUM(orders) AS orders
+        """SELECT day, ROUND(CAST(SUM(total) AS numeric), 2) AS total, SUM(orders) AS orders
            FROM (
              SELECT date(created_at) AS day, grand_total AS total, 1 AS orders FROM food_bills
              UNION ALL
@@ -1119,7 +1119,7 @@ def dashboard():
     ).fetchall()
 
     payment_rows = conn.execute(
-        """SELECT payment_method AS method, ROUND(SUM(total), 2) AS total, SUM(orders) AS orders
+        """SELECT payment_method AS method, ROUND(CAST(SUM(total) AS numeric), 2) AS total, SUM(orders) AS orders
            FROM (
              SELECT payment_method, grand_total AS total, 1 AS orders FROM food_bills
              UNION ALL
@@ -1129,7 +1129,7 @@ def dashboard():
     ).fetchall()
 
     top_rows = conn.execute(
-        """SELECT item_name AS name, SUM(qty) AS qty, ROUND(SUM(line_total), 2) AS total
+        """SELECT item_name AS name, SUM(qty) AS qty, ROUND(CAST(SUM(line_total) AS numeric), 2) AS total
            FROM (
              SELECT item_name, qty, line_total FROM food_bill_items
              UNION ALL
@@ -1139,7 +1139,7 @@ def dashboard():
     ).fetchall()
 
     hour_rows = conn.execute(
-        """SELECT hour, SUM(orders) AS orders, ROUND(SUM(total), 2) AS total
+        """SELECT hour, SUM(orders) AS orders, ROUND(CAST(SUM(total) AS numeric), 2) AS total
            FROM (
              SELECT CAST(strftime('%H', created_at) AS INTEGER) AS hour, 1 AS orders, grand_total AS total FROM food_bills
              UNION ALL
