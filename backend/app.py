@@ -16,6 +16,7 @@ from flask_cors import CORS
 from werkzeug.security import check_password_hash
 
 from database import get_db, init_db, next_bill_number
+from print_service import print_receipt as send_receipt_to_printer
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 FRONTEND_DIR = os.path.join(BASE_DIR, "..", "frontend")
@@ -200,6 +201,22 @@ def me():
 @app.route("/api/health", methods=["GET"])
 def health():
     return ok({"status": "healthy", "time": datetime.now().isoformat()})
+
+
+@app.route("/api/receipts/print", methods=["POST"])
+@login_required
+def receipts_print():
+    body = request.get_json(silent=True) or {}
+    payload = body.get("receipt") or body
+    if not payload:
+        return error("Receipt payload is required", 400)
+
+    try:
+        print_result = send_receipt_to_printer(payload)
+    except Exception as exc:
+        return error(f"Printer service failed: {exc}", 500)
+
+    return ok(print_result)
 
 
 # =========================================================

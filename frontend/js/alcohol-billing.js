@@ -245,19 +245,20 @@
         const snapshot = await apiFetch(`/table-sessions/${TARGET_SESSION_ID}`);
         const existing = (snapshot.items || []).map(item => ({ name: item.item_name, price: Number(item.price), qty: Number(item.qty), item_kind: item.item_kind, brand: item.brand || "", bottle_size: item.bottle_size || "", tax_rate: Number(item.tax_rate || 5) }));
         const merged = [...existing, ...CART];
+        const customerName = document.getElementById("customerName").value.trim() || "Walk-in";
+        const customerPhone = document.getElementById("customerPhone").value.trim() || "-";
         await apiFetch(`/table-sessions/${TARGET_SESSION_ID}`, { method: "PUT", body: { customer_name: customerName, customer_phone: customerPhone, items: merged } });
-        const settled = await apiFetch(`/table-sessions/${TARGET_SESSION_ID}/settle`, { method: "POST", body: { payment_method: paymentMethod, discount: computeTotals().discount } });
-        if (doPrint) printReceipt({ bill_no: `${settled.table_no} · TABLE BILL`, created_at: new Date().toLocaleString(), customer_name: customerName, customer_phone: customerPhone, payment_method: settled.payment_method, items: merged.map(item => ({ item_name: item.name, qty: item.qty, line_total: item.price * item.qty })), subtotal: settled.subtotal, tax: settled.tax, discount: settled.discount, grand_total: settled.grand_total });
+        const settled = await apiFetch(`/table-sessions/${TARGET_SESSION_ID}/settle`, { method: "POST", body: { payment_method: document.getElementById("paymentMethod").value, discount: computeTotals().discount } });
+        if (doPrint) await printReceipt({ bill_type: "ALCOHOL", bill_no: `${settled.table_no} · TABLE BILL`, created_at: new Date().toLocaleString(), customer_name: customerName, customer_phone: customerPhone, payment_method: settled.payment_method, items: merged.map(item => ({ item_name: item.name, qty: item.qty, line_total: item.price * item.qty })), subtotal: settled.subtotal, tax: settled.tax, discount: settled.discount, grand_total: settled.grand_total, table_no: settled.table_no });
         showToast(`${settled.table_no} settled successfully`);
         TARGET_SESSION_ID = "";
         renderTableTargets();
       } else {
         const bill = await apiFetch("/alcohol/bills", { method: "POST", body: payload });
         showToast(`Bill ${bill.bill_no} confirmed`);
-        if (doPrint) printReceipt(bill);
+        if (doPrint) await printReceipt({ bill_type: "ALCOHOL", bill_no: bill.bill_no, created_at: bill.created_at, customer_name: bill.customer_name || "Walk-in", customer_phone: bill.customer_phone || "-", payment_method: bill.payment_method, items: (bill.items || []).map(item => ({ item_name: item.item_name, qty: item.qty, line_total: item.line_total })), subtotal: bill.subtotal, tax: bill.tax, discount: bill.discount, grand_total: bill.grand_total });
       }
 
-      // Only clear cart after a successful save
       CART = [];
       document.getElementById("customerName").value = "";
       document.getElementById("customerPhone").value = "";
@@ -267,7 +268,6 @@
       document.getElementById("confirmModal").classList.remove("show");
     } catch (err) {
       showToast(err.message, true);
-      // Do NOT clear the cart on failure
     } finally {
       [printBtn, onlyBtn].forEach(b => { b.disabled = false; b.textContent = labels[b.id]; });
     }
@@ -276,7 +276,17 @@
   document.getElementById("confirmPrintBtn").addEventListener("click", () => finalizeAlcoholBill(true));
   document.getElementById("confirmOnlyBtn").addEventListener("click", () => finalizeAlcoholBill(false));
 
-  function printReceipt(bill) {
+  async function printReceipt(bill) {
+    try {
+      const response = await apiFetch("/receipts/print", { method: "POST", body: { receipt: bill } });
+      if (response.printed) {
+        showToast("Receipt sent to thermal printer");
+        return;
+      }
+    } catch (err) {
+      console.warn("Thermal printer unavailable, falling back to browser print:", err);
+    }
+
     const area = document.getElementById("printArea");
     area.innerHTML = `
       <div style="text-align:center;border-bottom:1px dashed #000;padding-bottom:6px;margin-bottom:6px;">
@@ -291,7 +301,7 @@
         Payment: ${escapeHtml(bill.payment_method)}
       </div>
       <div style="border-top:1px dashed #000;padding-top:6px;font-size:11px;">
-        ${bill.items.map(i => `
+        ${(bill.items || []).map(i => `
           <div style="display:flex;justify-content:space-between;">
             <span>${escapeHtml(i.item_name)} x${i.qty}</span><span>${formatMoney(i.line_total)}</span>
           </div>

@@ -289,7 +289,7 @@
       if (ACTIVE_TABLE) {
         const snapshot = await apiFetch(`/table-sessions/${ACTIVE_TABLE.id}`);
         const settled = await apiFetch(`/table-sessions/${ACTIVE_TABLE.id}/settle`, { method: "POST", body: { payment_method: paymentMethod, discount: computeTotals().discount } });
-        if (doPrint) printTableReceipt(snapshot, settled);
+        if (doPrint) await printTableReceipt(snapshot, settled);
         showToast(`${settled.table_no} settled successfully`);
         ACTIVE_TABLE = null;
         CART = [];
@@ -297,7 +297,19 @@
       } else {
         const bill = await apiFetch("/food/bills", { method: "POST", body: { customer_name: document.getElementById("customerName").value.trim(), customer_phone: document.getElementById("customerPhone").value.trim(), items: CART, discount: computeTotals().discount, tax_percent: currentTaxPercent(), payment_method: paymentMethod } });
         showToast(`Bill ${bill.bill_no} confirmed`);
-        if (doPrint) printReceipt(bill);
+        if (doPrint) await printReceipt({
+          bill_type: "FOOD",
+          bill_no: bill.bill_no,
+          created_at: bill.created_at,
+          customer_name: bill.customer_name || "Walk-in",
+          customer_phone: bill.customer_phone || "-",
+          payment_method: bill.payment_method,
+          items: (bill.items || []).map(item => ({ item_name: item.item_name, qty: item.qty, line_total: item.line_total })),
+          subtotal: bill.subtotal,
+          tax: bill.tax,
+          discount: bill.discount,
+          grand_total: bill.grand_total,
+        });
       }
       document.getElementById("customerName").value = "";
       document.getElementById("customerPhone").value = "";
@@ -315,12 +327,35 @@
   document.getElementById("confirmPrintBtn").addEventListener("click", () => finalizeBill(true));
   document.getElementById("confirmOnlyBtn").addEventListener("click", () => finalizeBill(false));
 
-  function printTableReceipt(snapshot, settled) {
-    printReceipt({ bill_no: `${settled.table_no} · TABLE BILL`, created_at: new Date().toLocaleString(), customer_name: snapshot.customer_name, customer_phone: snapshot.customer_phone, payment_method: settled.payment_method, items: snapshot.items.map(item => ({ item_name: item.item_name, qty: item.qty, line_total: item.line_total })), subtotal: settled.subtotal, tax: settled.tax, discount: settled.discount, grand_total: settled.grand_total });
+  async function printTableReceipt(snapshot, settled) {
+    await printReceipt({
+      bill_type: "FOOD",
+      bill_no: `${settled.table_no} · TABLE BILL`,
+      created_at: new Date().toLocaleString(),
+      customer_name: snapshot.customer_name || "Walk-in",
+      customer_phone: snapshot.customer_phone || "-",
+      payment_method: settled.payment_method,
+      items: (snapshot.items || []).map(item => ({ item_name: item.item_name, qty: item.qty, line_total: item.line_total })),
+      subtotal: settled.subtotal,
+      tax: settled.tax,
+      discount: settled.discount,
+      grand_total: settled.grand_total,
+      table_no: settled.table_no,
+    });
   }
 
-  function printReceipt(bill) {
-    document.getElementById("printArea").innerHTML = `<div style="text-align:center;border-bottom:1px dashed #000;padding-bottom:6px;margin-bottom:6px;"><strong style="font-size:15px;">KING FAMILY RESTAURANT</strong><br/><span style="font-size:11px;">FOOD BILL</span><br/><span style="font-size:11px;">${escapeHtml(bill.bill_no)}</span><br/><span style="font-size:10px;">${escapeHtml(bill.created_at)}</span></div><div style="font-size:11px;margin-bottom:6px;">Customer: ${escapeHtml(bill.customer_name)}<br/>Phone: ${escapeHtml(bill.customer_phone)}<br/>Payment: ${escapeHtml(bill.payment_method)}</div><div style="border-top:1px dashed #000;padding-top:6px;font-size:11px;">${bill.items.map(i => `<div style="display:flex;justify-content:space-between;"><span>${escapeHtml(i.item_name)} x${i.qty}</span><span>${formatMoney(i.line_total)}</span></div>`).join("")}</div><div style="border-top:1px dashed #000;margin-top:6px;padding-top:6px;font-size:11px;"><div style="display:flex;justify-content:space-between;"><span>Subtotal</span><span>${formatMoney(bill.subtotal)}</span></div><div style="display:flex;justify-content:space-between;"><span>Tax</span><span>${formatMoney(bill.tax)}</span></div><div style="display:flex;justify-content:space-between;"><span>Discount</span><span>−${formatMoney(bill.discount)}</span></div><div style="display:flex;justify-content:space-between;font-weight:bold;font-size:13px;margin-top:4px;"><span>GRAND TOTAL</span><span>${formatMoney(bill.grand_total)}</span></div></div><div style="text-align:center;margin-top:10px;font-size:10px;">Thank you, visit again!</div>`;
+  async function printReceipt(bill) {
+    try {
+      const response = await apiFetch("/receipts/print", { method: "POST", body: { receipt: bill } });
+      if (response.printed) {
+        showToast("Receipt sent to thermal printer");
+        return;
+      }
+    } catch (err) {
+      console.warn("Thermal printer unavailable, falling back to browser print:", err);
+    }
+
+    document.getElementById("printArea").innerHTML = `<div style="text-align:center;border-bottom:1px dashed #000;padding-bottom:6px;margin-bottom:6px;"><strong style="font-size:15px;">KING FAMILY RESTAURANT</strong><br/><span style="font-size:11px;">FOOD BILL</span><br/><span style="font-size:11px;">${escapeHtml(bill.bill_no)}</span><br/><span style="font-size:10px;">${escapeHtml(bill.created_at)}</span></div><div style="font-size:11px;margin-bottom:6px;">Customer: ${escapeHtml(bill.customer_name)}<br/>Phone: ${escapeHtml(bill.customer_phone)}<br/>Payment: ${escapeHtml(bill.payment_method)}</div><div style="border-top:1px dashed #000;padding-top:6px;font-size:11px;">${(bill.items || []).map(i => `<div style="display:flex;justify-content:space-between;"><span>${escapeHtml(i.item_name)} x${i.qty}</span><span>${formatMoney(i.line_total)}</span></div>`).join("")}</div><div style="border-top:1px dashed #000;margin-top:6px;padding-top:6px;font-size:11px;"><div style="display:flex;justify-content:space-between;"><span>Subtotal</span><span>${formatMoney(bill.subtotal)}</span></div><div style="display:flex;justify-content:space-between;"><span>Tax</span><span>${formatMoney(bill.tax)}</span></div><div style="display:flex;justify-content:space-between;"><span>Discount</span><span>−${formatMoney(bill.discount)}</span></div><div style="display:flex;justify-content:space-between;font-weight:bold;font-size:13px;margin-top:4px;"><span>GRAND TOTAL</span><span>${formatMoney(bill.grand_total)}</span></div></div><div style="text-align:center;margin-top:10px;font-size:10px;">Thank you, visit again!</div>`;
     window.print();
   }
 
