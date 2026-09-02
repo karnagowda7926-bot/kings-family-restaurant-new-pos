@@ -382,3 +382,57 @@ async function sendReceiptToPrinter(receipt) {
   }
   return false;
 }
+
+// =========================================================
+// Receipt rendering (browser fallback print)
+// =========================================================
+//
+// One renderer for all three callers - food billing, bar billing, and the
+// Orders reprint - so the two rules below hold everywhere:
+//   FOOD    shows the restaurant name and the GST number.
+//   ALCOHOL shows neither; the bar slip carries no restaurant identity.
+const RECEIPT_RESTAURANT_NAME = "KING FAMILY RESTAURANT";
+const RECEIPT_GST_NUMBER = "29EAFPK7266B1ZK";
+
+function receiptHtml(bill) {
+  const isAlcohol = String(bill.bill_type || "FOOD").toUpperCase() === "ALCOHOL";
+  const line = (label, value, extra = "") =>
+    `<div style="display:flex;justify-content:space-between;${extra}"><span>${label}</span><span>${value}</span></div>`;
+
+  const header = isAlcohol
+    ? `<span style="font-size:12px;font-weight:bold;">BAR BILL</span><br/>`
+    : `<strong style="font-size:15px;">${escapeHtml(RECEIPT_RESTAURANT_NAME)}</strong><br/>
+       <span style="font-size:10px;">GSTIN: ${escapeHtml(RECEIPT_GST_NUMBER)}</span><br/>
+       <span style="font-size:11px;">FOOD BILL</span><br/>`;
+
+  return `
+    <div style="text-align:center;border-bottom:1px dashed #000;padding-bottom:6px;margin-bottom:6px;">
+      ${header}
+      <span style="font-size:11px;">${escapeHtml(bill.bill_no)}</span><br/>
+      <span style="font-size:10px;">${escapeHtml(bill.created_at)}</span>
+    </div>
+    <div style="font-size:11px;margin-bottom:6px;">
+      Customer: ${escapeHtml(bill.customer_name)}<br/>
+      Phone: ${escapeHtml(bill.customer_phone)}<br/>
+      Payment: ${escapeHtml(bill.payment_method)}
+    </div>
+    <div style="border-top:1px dashed #000;padding-top:6px;font-size:11px;">
+      ${(bill.items || []).map(i =>
+        line(`${escapeHtml(i.item_name)} x${i.qty}`, formatMoney(i.line_total))
+      ).join("")}
+    </div>
+    <div style="border-top:1px dashed #000;margin-top:6px;padding-top:6px;font-size:11px;">
+      ${line("Subtotal", formatMoney(bill.subtotal))}
+      ${line("Tax", formatMoney(bill.tax))}
+      ${line("Discount", "−" + formatMoney(bill.discount))}
+      ${line("GRAND TOTAL", formatMoney(bill.grand_total), "font-weight:bold;font-size:13px;margin-top:4px;")}
+    </div>
+    <div style="text-align:center;margin-top:10px;font-size:10px;">Thank you, visit again!</div>
+  `;
+}
+
+// Render into the page's hidden 80mm slip and open the browser print dialog.
+function printReceiptInBrowser(bill) {
+  document.getElementById("printArea").innerHTML = receiptHtml(bill);
+  window.print();
+}

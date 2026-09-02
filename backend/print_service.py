@@ -23,6 +23,11 @@ LF = b"\n"
 PRINTER_CODEPAGE = "cp437"
 PRINTER_WIDTH = 42  # characters per line for font A on an 80mm roll
 
+# Header identity. A food bill is a GST invoice and carries the restaurant name
+# and GSTIN; a bar bill carries neither - the slip stays anonymous.
+RESTAURANT_NAME = os.environ.get("RESTAURANT_NAME", "KING FAMILY RESTAURANT")
+GST_NUMBER = os.environ.get("GST_NUMBER", "29EAFPK7266B1ZK")
+
 _ASCII_FOLD = {
     "₹": "Rs.",   # rupee sign
     "·": "-",     # middle dot (used in "T5 . TABLE BILL")
@@ -109,9 +114,17 @@ def build_receipt_text(payload: Dict[str, Any]) -> str:
     table_no = _safe_text(payload.get("table_no") or payload.get("table_label") or "")
     items = payload.get("items") or []
 
+    if bill_type == "ALCOHOL":
+        header = [_center("BAR BILL")]
+    else:
+        header = [
+            _center(RESTAURANT_NAME),
+            _center(f"GSTIN: {GST_NUMBER}"),
+            _center(f"{bill_type} BILL"),
+        ]
+
     lines = [
-        _center("KING FAMILY RESTAURANT"),
-        _center(f"{bill_type} BILL"),
+        *header,
         _rule(),
         f"Bill No: {bill_no}",
         f"Date: {created_at}",

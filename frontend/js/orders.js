@@ -132,37 +132,19 @@
     });
     if (sent) return;
 
-    const area = document.getElementById("printArea");
-    area.innerHTML = `
-      <div style="text-align:center;border-bottom:1px dashed #000;padding-bottom:6px;margin-bottom:6px;">
-        <strong style="font-size:15px;">KING FAMILY RESTAURANT</strong><br/>
-        <span style="font-size:11px;">${bill.type} BILL</span><br/>
-        <span style="font-size:11px;">${escapeHtml(bill.bill_no)}</span><br/>
-        <span style="font-size:10px;">${escapeHtml(bill.created_at)}</span>
-      </div>
-      <div style="font-size:11px;margin-bottom:6px;">
-        Customer: ${escapeHtml(bill.customer_name)}<br/>
-        Phone: ${escapeHtml(bill.customer_phone)}<br/>
-        Payment: ${escapeHtml(bill.payment_method)}
-      </div>
-      <div style="border-top:1px dashed #000;padding-top:6px;font-size:11px;">
-        ${(bill.items || []).map(i => `
-          <div style="display:flex;justify-content:space-between;">
-            <span>${escapeHtml(i.item_name)} x${i.qty}</span><span>${formatMoney(i.line_total)}</span>
-          </div>
-        `).join("")}
-      </div>
-      <div style="border-top:1px dashed #000;margin-top:6px;padding-top:6px;font-size:11px;">
-        <div style="display:flex;justify-content:space-between;"><span>Subtotal</span><span>${formatMoney(bill.subtotal)}</span></div>
-        <div style="display:flex;justify-content:space-between;"><span>Tax</span><span>${formatMoney(bill.tax)}</span></div>
-        <div style="display:flex;justify-content:space-between;"><span>Discount</span><span>−${formatMoney(bill.discount)}</span></div>
-        <div style="display:flex;justify-content:space-between;font-weight:bold;font-size:13px;margin-top:4px;">
-          <span>GRAND TOTAL</span><span>${formatMoney(bill.grand_total)}</span>
-        </div>
-      </div>
-      <div style="text-align:center;margin-top:10px;font-size:10px;">Thank you, visit again!</div>
-    `;
-    window.print();
+    printReceiptInBrowser({
+      bill_type: bill.type,
+      bill_no: bill.bill_no,
+      created_at: bill.created_at,
+      customer_name: bill.customer_name || "Walk-in",
+      customer_phone: bill.customer_phone || "-",
+      payment_method: bill.payment_method,
+      items: bill.items,
+      subtotal: bill.subtotal,
+      tax: bill.tax,
+      discount: bill.discount,
+      grand_total: bill.grand_total,
+    });
   });
 
   loadOrders();

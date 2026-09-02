@@ -1,0 +1,264 @@
+/* ===============================================================
+   PREMIUM BILLING SURFACE
+   A finishing layer over base.css + billing.css, shared by the food
+   and bar billing screens. Everything here is presentational - no
+   layout is moved - so the existing markup and JS stay untouched.
+   Scoped to .billing-content so the 80mm #printArea slip, which must
+   stay plain black on white for the thermal head, is never affected.
+   =============================================================== */
+
+.billing-content{
+  background:
+    radial-gradient(1200px 420px at 12% -8%, rgba(18,117,108,.07), transparent 62%),
+    radial-gradient(900px 380px at 96% 4%, rgba(207,154,63,.07), transparent 58%),
+    var(--bg);
+}
+
+/* Money and counts line up in a column when the digits share a width. */
+.billing-content .i-price,
+.billing-content .t-row span:last-child,
+.billing-content .c-total,
+.billing-content .table-total,
+.billing-content .cat-count{font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1}
+
+/* ---- Panels: a lifted card with a lit top edge ---------------- */
+.billing-content .panel{
+  border-radius:20px;
+  border-color:rgba(214,222,212,.9);
+  background:linear-gradient(180deg,#fff 0%,#fdfefd 100%);
+  box-shadow:
+    0 1px 2px rgba(18,38,44,.04),
+    0 18px 42px -22px rgba(18,38,44,.24);
+  position:relative;
+}
+.billing-content .panel::before{
+  content:"";position:absolute;inset:0 0 auto;height:1px;border-radius:20px 20px 0 0;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.9),transparent);
+  pointer-events:none;
+}
+
+/* ---- Panel headings: accent bar + refined tracking ------------ */
+.billing-content .panel-title{
+  display:flex;align-items:center;gap:9px;
+  font-size:10px;letter-spacing:.14em;
+  color:var(--primary-dark);
+  background:linear-gradient(180deg,rgba(226,240,236,.55),transparent);
+  border-bottom:1px solid rgba(229,235,228,.9);
+  border-radius:20px 20px 0 0;
+}
+.billing-content .panel-title::before{
+  content:"";width:3px;height:12px;border-radius:2px;flex:none;
+  background:linear-gradient(180deg,var(--primary),var(--amber));
+}
+
+/* ---- Dining floor -------------------------------------------- */
+.billing-content .table-floor{padding:18px 20px 20px}
+.billing-content .table-floor-head h2{font-size:19px;letter-spacing:-.015em}
+.billing-content .eyebrow{letter-spacing:.16em}
+
+.billing-content .table-card{
+  border-radius:14px;
+  background:linear-gradient(180deg,#fff,#f7fbf8);
+  border-color:rgba(214,222,212,.95);
+  overflow:hidden;
+}
+.billing-content .table-card::after{
+  content:"";position:absolute;left:0;top:0;bottom:0;width:3px;
+  background:linear-gradient(180deg,#cfe0d7,#e8efe9);
+  transition:background .18s var(--ease-out);
+}
+.billing-content .table-card:hover{
+  box-shadow:0 14px 28px -14px rgba(18,38,44,.28);
+  border-color:#9ed3c2;
+}
+.billing-content .table-card:hover::after{background:linear-gradient(180deg,var(--primary),#6cc3ae)}
+.billing-content .table-card.open{
+  background:linear-gradient(180deg,#fffaf1,#fff4e2);
+  border-color:#eabf7d;
+}
+.billing-content .table-card.open::after{background:linear-gradient(180deg,var(--amber),#e8c98d)}
+.billing-content .table-card.active{
+  background:linear-gradient(180deg,#f1faf6,#e6f5ef);
+  box-shadow:0 0 0 2px rgba(18,117,108,.16), 0 14px 30px -16px rgba(18,117,108,.5);
+}
+.billing-content .table-card.active::after{background:linear-gradient(180deg,var(--primary),var(--primary-dark))}
+.billing-content .table-card .table-no{letter-spacing:-.02em}
+.billing-content .table-card .table-state{
+  padding:3px 7px;border-radius:999px;background:rgba(18,117,108,.09);
+  right:7px;top:7px;letter-spacing:.09em;
+}
+.billing-content .table-card.open .table-state{background:rgba(207,154,63,.14)}
+
+/* ---- Category rail ------------------------------------------- */
+.billing-content .cat-btn{border-radius:11px;padding:11px 12px;font-size:11.5px}
+.billing-content .cat-btn .cat-count{
+  margin-left:auto;font-size:9.5px;font-weight:800;
+  padding:2px 7px;border-radius:999px;
+  background:rgba(18,117,108,.08);color:var(--primary-dark);
+}
+.billing-content .cat-btn.active{
+  background:linear-gradient(135deg,var(--primary),#0e6259);
+  box-shadow:0 10px 20px -10px rgba(18,117,108,.65);
+}
+.billing-content .cat-btn.active .cat-count{background:rgba(255,255,255,.2);color:#fff}
+
+/* ---- Search -------------------------------------------------- */
+.billing-content .menu-panel-head{
+  padding:13px 16px;
+  background:linear-gradient(180deg,rgba(226,240,236,.4),transparent);
+  border-radius:20px 20px 0 0;
+}
+.billing-content .menu-panel-head input{
+  border-radius:11px;background:var(--panel-2);
+  border:1px solid rgba(214,222,212,.9);
+  transition:border-color .18s var(--ease-out),box-shadow .18s var(--ease-out),background .18s;
+}
+.billing-content .menu-panel-head input:focus{
+  background:#fff;border-color:var(--primary);box-shadow:var(--ring);outline:none;
+}
+
+/* ---- Product cards ------------------------------------------- */
+.billing-content .item-card{
+  border-radius:16px;
+  border-color:rgba(214,222,212,.9);
+  background:linear-gradient(180deg,#fff,#fcfdfc);
+}
+.billing-content .item-card-image{border-radius:15px 15px 0 0;position:relative}
+.billing-content .item-card-image::after{
+  content:"";position:absolute;inset:auto 0 0;height:38%;
+  background:linear-gradient(180deg,transparent,rgba(12,32,30,.16));
+  pointer-events:none;
+}
+.billing-content .item-card:hover{
+  border-color:#9ed3c2;
+  box-shadow:0 18px 34px -18px rgba(18,38,44,.34);
+}
+.billing-content .item-card .i-name{font-size:12.5px;letter-spacing:-.01em}
+.billing-content .item-card .i-price{
+  display:inline-block;margin-top:10px;
+  padding:4px 9px;border-radius:999px;
+  font-size:12.5px;color:var(--primary-dark);
+  background:linear-gradient(135deg,rgba(18,117,108,.1),rgba(18,117,108,.05));
+}
+.billing-content .item-card::after{
+  border-radius:9px;padding:6px 9px;
+  background:linear-gradient(135deg,var(--primary),#0e6259);
+  box-shadow:0 8px 16px -8px rgba(18,117,108,.8);
+}
+
+/* ---- Cart / current bill ------------------------------------- */
+.billing-content .cart-panel .panel-title{position:sticky;top:0;z-index:2;background:#fff}
+.billing-content .cart-fields label{letter-spacing:.09em;color:var(--muted)}
+.billing-content .cart-fields input,
+.billing-content .cart-fields select{
+  border-radius:10px;background:var(--panel-2);
+  border:1px solid rgba(214,222,212,.9);
+  transition:border-color .16s var(--ease-out),box-shadow .16s var(--ease-out),background .16s;
+}
+.billing-content .cart-fields input:focus,
+.billing-content .cart-fields select:focus{
+  background:#fff;border-color:var(--primary);box-shadow:var(--ring);outline:none;
+}
+.billing-content .cart-row{border-bottom:1px solid rgba(237,241,237,.9)}
+.billing-content .cart-row .qty-ctrl button{border-radius:7px}
+.billing-content .cart-row .qty-ctrl button:hover{
+  background:linear-gradient(135deg,var(--primary),#0e6259);border-color:transparent;
+}
+
+.billing-content .totals-box{
+  margin:12px 15px 0;padding:14px 15px;
+  border:1px solid rgba(214,222,212,.9);
+  border-radius:16px;
+  background:linear-gradient(180deg,#fbfdfb,#f3f8f5);
+}
+.billing-content .totals-box .t-row{font-size:11.5px}
+.billing-content .totals-box .t-row.grand{
+  border-top:1px dashed rgba(18,117,108,.28);
+  margin-top:9px;padding-top:12px;
+  font-size:21px;letter-spacing:-.02em;
+  color:var(--primary-dark);
+}
+.billing-content .totals-box .t-row.grand span:first-child{
+  font-size:10px;font-weight:850;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--muted);align-self:center;
+}
+
+.billing-content #confirmBillBtn{
+  border-radius:13px;letter-spacing:.03em;
+  background:linear-gradient(135deg,var(--primary),#0d635a);
+  box-shadow:0 14px 26px -12px rgba(18,117,108,.75);
+}
+.billing-content #confirmBillBtn:hover:not(:disabled){
+  box-shadow:0 18px 32px -12px rgba(18,117,108,.85);
+}
+.billing-content #confirmBillBtn:disabled{
+  background:linear-gradient(135deg,#c3d3ce,#b6c8c2);
+  box-shadow:none;color:#f2f6f4;
+}
+
+.billing-content .empty-state{font-size:12px;color:var(--muted-2)}
+
+/* ---- Slim scrollbars inside the panels ----------------------- */
+.billing-content .cat-list,
+.billing-content .item-grid,
+.billing-content .cart-list,
+.billing-content .cart-panel{scrollbar-width:thin;scrollbar-color:#cfdcd6 transparent}
+.billing-content .cat-list::-webkit-scrollbar,
+.billing-content .item-grid::-webkit-scrollbar,
+.billing-content .cart-list::-webkit-scrollbar,
+.billing-content .cart-panel::-webkit-scrollbar{width:8px}
+.billing-content .cat-list::-webkit-scrollbar-thumb,
+.billing-content .item-grid::-webkit-scrollbar-thumb,
+.billing-content .cart-list::-webkit-scrollbar-thumb,
+.billing-content .cart-panel::-webkit-scrollbar-thumb{
+  background:#d5e0da;border-radius:99px;border:2px solid transparent;background-clip:content-box;
+}
+
+/* ---- Confirm / table modals ---------------------------------- */
+.modal-overlay{backdrop-filter:blur(3px)}
+.modal-box{
+  border-radius:22px;
+  box-shadow:0 2px 8px rgba(18,38,44,.08), 0 40px 80px -28px rgba(18,38,44,.5);
+}
+.modal-header{
+  border-radius:22px 22px 0 0;
+  background:linear-gradient(180deg,rgba(226,240,236,.5),transparent);
+}
+.modal-body .confirm-totals .t-row.grand{
+  font-size:20px;color:var(--primary-dark);letter-spacing:-.02em;
+  border-top:1px dashed rgba(18,117,108,.28);padding-top:11px;margin-top:8px;
+}
+.modal-footer #confirmPrintBtn{
+  background:linear-gradient(135deg,var(--primary),#0d635a);
+  box-shadow:0 12px 24px -12px rgba(18,117,108,.75);
+}
+
+/* The premium layer is screen-only: printing must stay flat black. */
+@media print{
+  .billing-content{background:none}
+}
+
+/* ---- Refinements --------------------------------------------- */
+
+/* Topbar: a quiet gradient wash and a hairline that picks up the
+   brand colours, scoped to the two billing screens. */
+.main-area:has(.billing-content) .topbar{
+  background:linear-gradient(180deg,#fff, #fbfdfb);
+  border-bottom:1px solid transparent;
+  border-image:linear-gradient(90deg,rgba(18,117,108,.35),rgba(207,154,63,.28),transparent) 1;
+}
+.main-area:has(.billing-content) .topbar h1{letter-spacing:-.02em}
+
+/* The card's supporting line ("Tax 18%", "Tap to add...") is a hint,
+   not a headline - it was competing with the item name. */
+.billing-content .item-card .i-tax{
+  font-size:9.5px;letter-spacing:.02em;color:var(--muted-2);margin-top:5px;
+}
+
+/* Bar billing puts three fields in one row; the destination select was
+   squeezed to "Counter sal..." with a wrapping label. Give it the row. */
+.billing-content .cart-fields:has(#alcoholTableTarget){flex-wrap:wrap}
+.billing-content .cart-fields .field:has(#alcoholTableTarget){flex:1 0 100%}
+
+/* Disabled confirm button: keep the label legible. */
+.billing-content #confirmBillBtn:disabled{color:#7d8f89}
