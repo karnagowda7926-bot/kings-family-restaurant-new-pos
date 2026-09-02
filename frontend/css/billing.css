@@ -10,3 +10,43 @@
 .cart-fields .discount-row{display:flex;gap:6px}
 .cart-fields .discount-row input{flex:1;min-width:0}
 .cart-fields .discount-row select{width:52px;flex-shrink:0;padding-left:8px;padding-right:4px}
+
+/* ---------------------------------------------------------------
+   Receipt print darkness.
+   Courier New at normal weight prints faint: thin strokes fire few
+   heat dots on a thermal head, and antialiasing turns glyph edges
+   grey, which a 1-bit printer drops entirely. Force pure black,
+   bold strokes, and no smoothing so every pixel is ink.
+   --------------------------------------------------------------- */
+@media print{
+  body>#printArea{
+    color:#000!important;
+    font-weight:700!important;
+    -webkit-font-smoothing:none;
+    -moz-osx-font-smoothing:grayscale;
+    text-rendering:geometricPrecision;
+    -webkit-print-color-adjust:exact;
+    print-color-adjust:exact;
+  }
+  #printArea *{
+    color:#000!important;
+    font-weight:700!important;
+    /* Synthetically thickens each glyph beyond what bold alone gives. */
+    -webkit-text-stroke:.26px #000;
+    text-shadow:0 0 .01px #000;
+    opacity:1!important;
+  }
+  /* Separators: dashed light-grey rules print as broken specks. */
+  #printArea div[style*="dashed"]{
+    border-color:#000!important;
+    border-style:solid!important;
+    border-width:0;
+  }
+  #printArea div[style*="border-bottom"]{border-bottom:1.4px solid #000!important}
+  #printArea div[style*="border-top"]{border-top:1.4px solid #000!important}
+  /* Grand total carries the most weight on the slip. */
+  #printArea div[style*="font-weight:bold"]{
+    -webkit-text-stroke:.5px #000;
+    font-weight:900!important;
+  }
+}
