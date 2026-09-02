@@ -262,3 +262,11 @@
 
 /* Disabled confirm button: keep the label legible. */
 .billing-content #confirmBillBtn:disabled{color:#7d8f89}
+
+/* Discount + Tax sit side by side; Payment Method takes the row below.
+   Three controls across a 350px cart column wrapped every label and
+   squeezed the tax hint into three lines. */
+.billing-content .cart-fields{flex-wrap:wrap}
+.billing-content .cart-fields .field:has(#paymentMethod){flex:1 0 100%}
+.billing-content .cart-fields .field:has(#discountInput),
+.billing-content .cart-fields .field:has(#taxInput){flex:1 1 0;min-width:0}

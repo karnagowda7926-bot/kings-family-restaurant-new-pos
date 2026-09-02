@@ -10,6 +10,27 @@
   let activeCategoryId = "all";
   let TARGET_SESSION_ID = "";
 
+  // Bar tax is charged as one rate across the bill, entered on the Tax (%)
+  // field, exactly as on the food screen. 18% is the rate most of the bar
+  // catalogue carries, so it is the starting default before anything is saved.
+  const TAX_PERCENT = 18;
+  const TAX_STORAGE_KEY = "kf_default_bar_tax_percent";
+
+  function storedTaxPercent() {
+    try {
+      const raw = Number(localStorage.getItem(TAX_STORAGE_KEY));
+      if (Number.isFinite(raw) && raw >= 0 && localStorage.getItem(TAX_STORAGE_KEY) !== null) return raw;
+    } catch (e) { /* storage unavailable */ }
+    return TAX_PERCENT;
+  }
+
+  // Live value from the Tax (%) field, falling back to the saved default.
+  function currentTaxPercent() {
+    const el = document.getElementById("taxInput");
+    const raw = Number(el && el.value);
+    return Number.isFinite(raw) && raw >= 0 ? raw : storedTaxPercent();
+  }
+
   async function loadData() {
     try {
       [CATEGORIES, ITEMS, TABLES] = await Promise.all([
@@ -155,12 +176,14 @@
 
   function computeTotals() {
     const subtotal = CART.reduce((s, c) => s + c.price * c.qty, 0);
-    const tax = CART.reduce((s, c) => s + (c.price * c.qty * c.tax_rate / 100), 0);
+    const taxPercent = currentTaxPercent();
+    const tax = subtotal * (taxPercent / 100);
     const discount = computeDiscountAmount(subtotal);
     const grandTotal = Math.max(0, subtotal + tax - discount);
     return {
       subtotal: Math.round(subtotal * 100) / 100,
       tax: Math.round(tax * 100) / 100,
+      taxPercent,
       discount,
       grandTotal: Math.round(grandTotal * 100) / 100,
     };
@@ -169,6 +192,7 @@
   function updateTotals() {
     const t = computeTotals();
     document.getElementById("tSubtotal").textContent = formatMoney(t.subtotal);
+    document.getElementById("tTaxLabel").textContent = `Tax (${t.taxPercent}%)`;
     document.getElementById("tTax").textContent = formatMoney(t.tax);
     document.getElementById("tDiscountLabel").textContent = discountRowLabel();
     document.getElementById("tDiscount").textContent = "− " + formatMoney(t.discount);
@@ -177,6 +201,19 @@
   }
   document.getElementById("discountInput").addEventListener("input", updateTotals);
   setupDiscountMode(updateTotals);
+
+  // Tax (%): prefill from the saved default, and persist any change so it
+  // carries over to future bar bills. Its own key - bar rates (18-20%) are
+  // nothing like the food rate, so the two must not share a default.
+  const taxInput = document.getElementById("taxInput");
+  taxInput.value = storedTaxPercent();
+  taxInput.addEventListener("input", () => {
+    const val = Number(taxInput.value);
+    if (Number.isFinite(val) && val >= 0) {
+      try { localStorage.setItem(TAX_STORAGE_KEY, String(val)); } catch (e) { /* storage unavailable */ }
+    }
+    updateTotals();
+  });
 
   document.getElementById("clearCartBtn").addEventListener("click", () => {
     CART = [];
@@ -206,7 +243,7 @@
       </div>
       <div class="confirm-totals">
         <div class="t-row"><span>Subtotal</span><span>${formatMoney(t.subtotal)}</span></div>
-        <div class="t-row"><span>Tax</span><span>${formatMoney(t.tax)}</span></div>
+        <div class="t-row"><span>Tax (${t.taxPercent}%)</span><span>${formatMoney(t.tax)}</span></div>
         <div class="t-row"><span>Discount</span><span>− ${formatMoney(t.discount)}</span></div>
         <div class="t-row grand"><span>Grand Total</span><span>${formatMoney(t.grandTotal)}</span></div>
       </div>
@@ -237,6 +274,7 @@
       customer_phone: document.getElementById("customerPhone").value.trim(),
       items: CART,
       discount: computeTotals().discount,
+      tax_percent: currentTaxPercent(),
       payment_method: document.getElementById("paymentMethod").value,
     };
 

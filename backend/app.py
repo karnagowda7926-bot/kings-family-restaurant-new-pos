@@ -985,6 +985,19 @@ def create_alcohol_bill():
     except ValueError as e:
         return error(str(e))
 
+    # A bar bill normally taxes each item at its own rate (beer 18%, spirits
+    # 20%, ...). When the counter sends tax_percent, that single rate applies to
+    # the whole bill instead - the same override the food screen sends. Omitted
+    # (table settlement, older clients) keeps the per-item behaviour.
+    tax_percent = body.get("tax_percent")
+    if tax_percent in (None, ""):
+        tax_percent = None
+    else:
+        try:
+            tax_percent = to_float(tax_percent, "tax_percent")
+        except ValueError as e:
+            return error(str(e))
+
     subtotal = 0.0
     tax_total = 0.0
     clean_items = []
@@ -995,6 +1008,8 @@ def create_alcohol_bill():
             tax_rate = to_float(it.get("tax_rate", 0), "tax_rate")
         except ValueError as e:
             return error(str(e))
+        if tax_percent is not None:
+            tax_rate = tax_percent
         name = (it.get("name") or "").strip()
         if not name:
             return error("Each item must have a name")
