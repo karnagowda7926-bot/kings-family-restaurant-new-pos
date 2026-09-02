@@ -870,6 +870,19 @@ def _seed(conn):
     conn.commit()
 
 
+# Columns added after the first release. "CREATE TABLE IF NOT EXISTS" leaves an
+# existing table alone, so databases created by an earlier version need these
+# added explicitly. Both backends run the same list - keep it that way, or a
+# column lands on SQLite and silently breaks the hosted Postgres install.
+ADDITIVE_MIGRATIONS = (
+    ("food_bills", "table_id", "INTEGER"),
+    ("food_bills", "table_session_id", "INTEGER"),
+    ("alcohol_bills", "table_id", "INTEGER"),
+    ("alcohol_bills", "table_session_id", "INTEGER"),
+    ("restaurant_tables", "qr_token", "TEXT"),
+)
+
+
 def _init_postgres():
     """Create the schema and seed data on the Postgres server. An advisory lock
     keeps concurrent gunicorn workers from racing on the first-ever boot."""
@@ -879,10 +892,11 @@ def _init_postgres():
         conn._raw.commit()
         conn.executescript(PG_SCHEMA)
         conn.commit()
-        # Additive migration for installs whose restaurant_tables predates QR ordering.
-        conn._raw.execute(
-            "ALTER TABLE restaurant_tables ADD COLUMN IF NOT EXISTS qr_token TEXT"
-        )
+        # Additive migrations for installs created by an earlier schema version.
+        for table, column, definition in ADDITIVE_MIGRATIONS:
+            conn._raw.execute(
+                f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {column} {definition}"
+            )
         conn._raw.execute(
             "CREATE UNIQUE INDEX IF NOT EXISTS restaurant_tables_qr_token_key "
             "ON restaurant_tables (qr_token)"
@@ -907,13 +921,7 @@ def init_db():
     conn.executescript(SCHEMA)
 
     # Safe migrations for databases created by the earlier ERP version.
-    for table, column, definition in (
-        ("food_bills", "table_id", "INTEGER"),
-        ("food_bills", "table_session_id", "INTEGER"),
-        ("alcohol_bills", "table_id", "INTEGER"),
-        ("alcohol_bills", "table_session_id", "INTEGER"),
-        ("restaurant_tables", "qr_token", "TEXT"),
-    ):
+    for table, column, definition in ADDITIVE_MIGRATIONS:
         existing_columns = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
         if column not in existing_columns:
             conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
