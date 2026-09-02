@@ -277,15 +277,7 @@
   document.getElementById("confirmOnlyBtn").addEventListener("click", () => finalizeAlcoholBill(false));
 
   async function printReceipt(bill) {
-    try {
-      const response = await apiFetch("/receipts/print", { method: "POST", body: { receipt: bill } });
-      if (response.printed) {
-        showToast("Receipt sent to thermal printer");
-        return;
-      }
-    } catch (err) {
-      console.warn("Thermal printer unavailable, falling back to browser print:", err);
-    }
+    if (await sendReceiptToPrinter(bill)) return;
 
     const area = document.getElementById("printArea");
     area.innerHTML = `

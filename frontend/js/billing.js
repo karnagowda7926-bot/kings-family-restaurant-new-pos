@@ -345,15 +345,7 @@
   }
 
   async function printReceipt(bill) {
-    try {
-      const response = await apiFetch("/receipts/print", { method: "POST", body: { receipt: bill } });
-      if (response.printed) {
-        showToast("Receipt sent to thermal printer");
-        return;
-      }
-    } catch (err) {
-      console.warn("Thermal printer unavailable, falling back to browser print:", err);
-    }
+    if (await sendReceiptToPrinter(bill)) return;
 
     document.getElementById("printArea").innerHTML = `<div style="text-align:center;border-bottom:1px dashed #000;padding-bottom:6px;margin-bottom:6px;"><strong style="font-size:15px;">KING FAMILY RESTAURANT</strong><br/><span style="font-size:11px;">FOOD BILL</span><br/><span style="font-size:11px;">${escapeHtml(bill.bill_no)}</span><br/><span style="font-size:10px;">${escapeHtml(bill.created_at)}</span></div><div style="font-size:11px;margin-bottom:6px;">Customer: ${escapeHtml(bill.customer_name)}<br/>Phone: ${escapeHtml(bill.customer_phone)}<br/>Payment: ${escapeHtml(bill.payment_method)}</div><div style="border-top:1px dashed #000;padding-top:6px;font-size:11px;">${(bill.items || []).map(i => `<div style="display:flex;justify-content:space-between;"><span>${escapeHtml(i.item_name)} x${i.qty}</span><span>${formatMoney(i.line_total)}</span></div>`).join("")}</div><div style="border-top:1px dashed #000;margin-top:6px;padding-top:6px;font-size:11px;"><div style="display:flex;justify-content:space-between;"><span>Subtotal</span><span>${formatMoney(bill.subtotal)}</span></div><div style="display:flex;justify-content:space-between;"><span>Tax</span><span>${formatMoney(bill.tax)}</span></div><div style="display:flex;justify-content:space-between;"><span>Discount</span><span>−${formatMoney(bill.discount)}</span></div><div style="display:flex;justify-content:space-between;font-weight:bold;font-size:13px;margin-top:4px;"><span>GRAND TOTAL</span><span>${formatMoney(bill.grand_total)}</span></div></div><div style="text-align:center;margin-top:10px;font-size:10px;">Thank you, visit again!</div>`;
     window.print();

@@ -208,7 +208,7 @@ def health():
 def receipts_print():
     body = request.get_json(silent=True) or {}
     payload = body.get("receipt") or body
-    if not payload:
+    if not isinstance(payload, dict) or not payload:
         return error("Receipt payload is required", 400)
 
     try:

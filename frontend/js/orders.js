@@ -88,7 +88,7 @@
           <div><strong>Date:</strong> ${escapeHtml(bill.created_at)}</div>
         </div>
         <div class="confirm-items">
-          ${bill.items.map(i => `
+          ${(bill.items || []).map(i => `
             <div class="ci-row"><span>${escapeHtml(i.item_name)} x${i.qty}</span><span>${formatMoney(i.line_total)}</span></div>
           `).join("")}
         </div>
@@ -112,9 +112,26 @@
     document.getElementById("viewModal").classList.remove("show");
   });
 
-  document.getElementById("printViewBtn").addEventListener("click", () => {
+  document.getElementById("printViewBtn").addEventListener("click", async () => {
     if (!currentBill) return;
     const bill = currentBill;
+
+    const sent = await sendReceiptToPrinter({
+      bill_type: bill.type,
+      bill_no: bill.bill_no,
+      created_at: bill.created_at,
+      customer_name: bill.customer_name || "Walk-in",
+      customer_phone: bill.customer_phone || "-",
+      payment_method: bill.payment_method,
+      items: (bill.items || []).map(i => ({ item_name: i.item_name, qty: i.qty, line_total: i.line_total })),
+      subtotal: bill.subtotal,
+      tax: bill.tax,
+      discount: bill.discount,
+      grand_total: bill.grand_total,
+      table_no: bill.table_no || "",
+    });
+    if (sent) return;
+
     const area = document.getElementById("printArea");
     area.innerHTML = `
       <div style="text-align:center;border-bottom:1px dashed #000;padding-bottom:6px;margin-bottom:6px;">
@@ -129,7 +146,7 @@
         Payment: ${escapeHtml(bill.payment_method)}
       </div>
       <div style="border-top:1px dashed #000;padding-top:6px;font-size:11px;">
-        ${bill.items.map(i => `
+        ${(bill.items || []).map(i => `
           <div style="display:flex;justify-content:space-between;">
             <span>${escapeHtml(i.item_name)} x${i.qty}</span><span>${formatMoney(i.line_total)}</span>
           </div>

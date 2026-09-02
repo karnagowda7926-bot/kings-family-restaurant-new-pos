@@ -362,3 +362,23 @@ function animatePress(element) {
   requestAnimationFrame(() => element.classList.add("is-pressed"));
   setTimeout(() => element.classList.remove("is-pressed"), 180);
 }
+
+// Try the backend thermal printer first. Returns true when the receipt actually
+// reached a printer; false means the caller should fall back to browser print.
+// Billing must never be blocked by a printer, so every failure is non-fatal.
+async function sendReceiptToPrinter(receipt) {
+  try {
+    const result = await apiFetch("/receipts/print", { method: "POST", body: { receipt } });
+    if (result && result.printed) {
+      showToast("Receipt sent to thermal printer");
+      return true;
+    }
+    if (result && result.status && result.status !== "disabled") {
+      console.warn("Thermal printer not ready:", result.status, result.error || "");
+      showToast("Printer unavailable — using browser print", true);
+    }
+  } catch (err) {
+    console.warn("Thermal printer unavailable, falling back to browser print:", err);
+  }
+  return false;
+}
