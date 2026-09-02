@@ -120,7 +120,7 @@ _RE_INSERT_TABLE = re.compile(r"insert\s+into\s+[\"']?(\w+)", re.I)
 
 # Tables with no surrogate "id" column - INSERTs into these must not get a
 # "RETURNING id" appended.
-_NO_ID_TABLES = {"counters"}
+_NO_ID_TABLES = {"counters", "app_settings"}
 
 
 def _translate(sql, has_params):
@@ -407,6 +407,14 @@ CREATE TABLE IF NOT EXISTS counters (
     value INTEGER NOT NULL DEFAULT 0
 );
 
+-- Internal key/value store. Currently holds the auto-generated session signing
+-- key so a deployment that forgets to set SECRET_KEY is still secure and keeps
+-- users logged in across restarts and across gunicorn workers.
+CREATE TABLE IF NOT EXISTS app_settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
+
 -- QR-based table ordering. Isolated from the billing tables above: a customer
 -- scans a table's QR, places one or more qr_orders during the visit, and staff
 -- move the accepted items into the table's session for the existing settle flow.
@@ -606,6 +614,14 @@ CREATE TABLE IF NOT EXISTS payments (
 CREATE TABLE IF NOT EXISTS counters (
     name TEXT PRIMARY KEY,
     value INTEGER NOT NULL DEFAULT 0
+);
+
+-- Internal key/value store. Currently holds the auto-generated session signing
+-- key so a deployment that forgets to set SECRET_KEY is still secure and keeps
+-- users logged in across restarts and across gunicorn workers.
+CREATE TABLE IF NOT EXISTS app_settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS qr_orders (
@@ -870,17 +886,201 @@ def _seed(conn):
     conn.commit()
 
 
-# Columns added after the first release. "CREATE TABLE IF NOT EXISTS" leaves an
-# existing table alone, so databases created by an earlier version need these
-# added explicitly. Both backends run the same list - keep it that way, or a
-# column lands on SQLite and silently breaks the hosted Postgres install.
-ADDITIVE_MIGRATIONS = (
-    ("food_bills", "table_id", "INTEGER"),
-    ("food_bills", "table_session_id", "INTEGER"),
-    ("alcohol_bills", "table_id", "INTEGER"),
-    ("alcohol_bills", "table_session_id", "INTEGER"),
-    ("restaurant_tables", "qr_token", "TEXT"),
+# =========================================================
+# Automatic schema sync
+# =========================================================
+#
+# "CREATE TABLE IF NOT EXISTS" creates missing tables but never touches a table
+# that already exists, so a column added to the schema after a database was
+# created is simply absent there - which is how a hosted install ends up
+# failing with 'column "table_id" of relation "food_bills" does not exist'.
+#
+# Rather than maintain a hand-written migration list (which drifted once
+# already: the columns were patched for SQLite and forgotten for Postgres),
+# the schema string itself is the source of truth. On every boot we parse it,
+# compare it against the columns the database actually has, and add whatever is
+# missing. Adding a column to SCHEMA/PG_SCHEMA is now the whole migration.
+
+_RE_CREATE_TABLE = re.compile(
+    r"CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+(\w+)\s*\((.*?)\n\s*\);",
+    re.I | re.S,
 )
+# Line-level constraints (as opposed to column definitions) inside CREATE TABLE.
+_TABLE_CONSTRAINTS = ("primary", "foreign", "unique", "check", "constraint")
+
+
+def _split_columns(body):
+    """Split a CREATE TABLE body on top-level commas, so NUMERIC(12, 2) survives."""
+    parts, depth, current = [], 0, []
+    for ch in body:
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+        if ch == "," and depth == 0:
+            parts.append("".join(current))
+            current = []
+        else:
+            current.append(ch)
+    parts.append("".join(current))
+    return parts
+
+
+def _schema_columns(schema_sql):
+    """-> {table: [(column, definition), ...]} parsed from the schema DDL."""
+    tables = {}
+    for table, body in _RE_CREATE_TABLE.findall(schema_sql):
+        columns = []
+        for part in _split_columns(body):
+            line = " ".join(
+                l.split("--")[0].strip() for l in part.strip().splitlines()
+            ).strip()
+            if not line or line.split()[0].lower() in _TABLE_CONSTRAINTS:
+                continue
+            name, _, definition = line.partition(" ")
+            columns.append((name.strip(), definition.strip()))
+        tables[table.lower()] = columns
+    return tables
+
+
+def _addable_definition(definition, for_sqlite):
+    """Make a column definition safe to ALTER onto a table that already has rows.
+
+    A surrogate key or a UNIQUE/NOT NULL column cannot simply be bolted onto
+    existing data, so those qualifiers are dropped; the column arrives nullable
+    and the application fills it going forward. Returns None for columns that
+    must not be added at all (the SERIAL/AUTOINCREMENT primary key).
+    """
+    lowered = definition.lower()
+    if "primary key" in lowered or "serial" in lowered:
+        return None
+    cleaned = re.sub(r"\s+REFERENCES\s+\w+\s*\([^)]*\)", "", definition, flags=re.I)
+    cleaned = re.sub(r"\s+UNIQUE\b", "", cleaned, flags=re.I)
+    # NOT NULL is only safe alongside a DEFAULT; otherwise existing rows fail it.
+    if "default" not in cleaned.lower():
+        cleaned = re.sub(r"\s+NOT\s+NULL\b", "", cleaned, flags=re.I)
+    if for_sqlite:
+        # SQLite rejects a non-constant DEFAULT in ALTER TABLE ADD COLUMN, e.g.
+        # DEFAULT (datetime('now', 'localtime')). Strip it - and the NOT NULL it
+        # was satisfying - so the column can be added at all.
+        stripped = _strip_paren_default(cleaned)
+        if stripped != cleaned:
+            cleaned = re.sub(r"\s+NOT\s+NULL\b", "", stripped, flags=re.I)
+    return cleaned.strip()
+
+
+def _strip_paren_default(definition):
+    """Remove a DEFAULT (...) clause, honouring nested parentheses."""
+    match = re.search(r"\s*DEFAULT\s*\(", definition, re.I)
+    if not match:
+        return definition
+    depth, index = 0, match.end() - 1
+    while index < len(definition):
+        if definition[index] == "(":
+            depth += 1
+        elif definition[index] == ")":
+            depth -= 1
+            if depth == 0:
+                return definition[: match.start()] + definition[index + 1 :]
+        index += 1
+    return definition[: match.start()]
+
+
+def _sync_columns_postgres(conn):
+    """Add any column present in PG_SCHEMA but missing from the live database."""
+    existing = {}
+    for row in conn._raw.execute(
+        "SELECT table_name, column_name FROM information_schema.columns "
+        "WHERE table_schema = current_schema()"
+    ).fetchall():
+        existing.setdefault(row[0].lower(), set()).add(row[1].lower())
+
+    added = []
+    for table, columns in _schema_columns(PG_SCHEMA).items():
+        if table not in existing:
+            continue  # CREATE TABLE just made it; it is already current
+        for column, definition in columns:
+            if column.lower() in existing[table]:
+                continue
+            safe = _addable_definition(definition, for_sqlite=False)
+            if not safe:
+                continue
+            conn._raw.execute(
+                f'ALTER TABLE {table} ADD COLUMN IF NOT EXISTS "{column}" {safe}'
+            )
+            added.append(f"{table}.{column}")
+    if added:
+        print(f"[database] added missing columns: {', '.join(added)}", flush=True)
+    return added
+
+
+def _sync_columns_sqlite(conn):
+    """SQLite counterpart of _sync_columns_postgres."""
+    added = []
+    for table, columns in _schema_columns(SCHEMA).items():
+        present = {
+            row["name"].lower()
+            for row in conn.execute(f"PRAGMA table_info({table})").fetchall()
+        }
+        if not present:
+            continue
+        for column, definition in columns:
+            if column.lower() in present:
+                continue
+            safe = _addable_definition(definition, for_sqlite=True)
+            if not safe:
+                continue
+            conn.execute(f'ALTER TABLE {table} ADD COLUMN "{column}" {safe}')
+            added.append(f"{table}.{column}")
+    if added:
+        print(f"[database] added missing columns: {', '.join(added)}", flush=True)
+    return added
+
+
+def get_or_create_secret_key():
+    """Return the session signing key, generating and storing one on first use.
+
+    Without this a deployment that forgets SECRET_KEY falls back to a constant
+    committed to a public repository, which lets anyone forge an admin session.
+    Keeping the generated key in the database (rather than in memory) means every
+    gunicorn worker signs with the same key and nobody is logged out by a
+    restart or a redeploy.
+    """
+    env_key = os.environ.get("SECRET_KEY", "").strip()
+    if env_key:
+        return env_key
+
+    conn = get_db()
+    try:
+        row = conn.execute(
+            "SELECT value FROM app_settings WHERE key = ?", ("secret_key",)
+        ).fetchone()
+        if row:
+            return row["value"]
+        generated = secrets.token_urlsafe(48)
+        try:
+            conn.execute(
+                "INSERT INTO app_settings (key, value) VALUES (?, ?)",
+                ("secret_key", generated),
+            )
+            conn.commit()
+        except Exception:
+            # Another worker inserted it first; use theirs.
+            conn.rollback()
+            row = conn.execute(
+                "SELECT value FROM app_settings WHERE key = ?", ("secret_key",)
+            ).fetchone()
+            if row:
+                return row["value"]
+            raise
+        print(
+            "[database] SECRET_KEY was not set - generated one and stored it in "
+            "app_settings. Set SECRET_KEY in the environment to control it.",
+            flush=True,
+        )
+        return generated
+    finally:
+        conn.close()
 
 
 def _init_postgres():
@@ -892,11 +1092,8 @@ def _init_postgres():
         conn._raw.commit()
         conn.executescript(PG_SCHEMA)
         conn.commit()
-        # Additive migrations for installs created by an earlier schema version.
-        for table, column, definition in ADDITIVE_MIGRATIONS:
-            conn._raw.execute(
-                f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {column} {definition}"
-            )
+        # Bring databases created by an earlier schema version up to date.
+        _sync_columns_postgres(conn)
         conn._raw.execute(
             "CREATE UNIQUE INDEX IF NOT EXISTS restaurant_tables_qr_token_key "
             "ON restaurant_tables (qr_token)"
@@ -920,11 +1117,9 @@ def init_db():
     conn = get_db()
     conn.executescript(SCHEMA)
 
-    # Safe migrations for databases created by the earlier ERP version.
-    for table, column, definition in ADDITIVE_MIGRATIONS:
-        existing_columns = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
-        if column not in existing_columns:
-            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+    # Bring databases created by an earlier schema version up to date.
+    _sync_columns_sqlite(conn)
+    conn.commit()
 
     _seed(conn)
     conn.close()

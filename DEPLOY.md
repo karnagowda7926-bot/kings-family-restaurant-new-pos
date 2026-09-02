@@ -49,7 +49,7 @@ free Postgres is deleted 30 days after creation; Supabase's free tier is not.)
 
 | Key | Value |
 | --- | --- |
-| `SECRET_KEY` | click **Generate** |
+| `SECRET_KEY` | click **Generate** (optional - see *Schema upgrades* below) |
 | `DATABASE_URL` | the Supabase Transaction pooler URI from Step 1 |
 | `PYTHON_VERSION` | `3.12.6` |
 | `RENDER` | `true` |
@@ -58,6 +58,28 @@ free Postgres is deleted 30 days after creation; Supabase's free tier is not.)
 Click **Deploy Web Service**. On first boot the app creates its tables in the
 Postgres database and seeds the menu + admin user. When live, the service URL
 opens `/pages/login.html`.
+
+## Schema upgrades (no manual migration step)
+
+`init_db()` runs on every boot, and it does three things, all idempotent:
+
+1. Creates any table that does not exist yet.
+2. **Adds any column that the schema has but the database does not.** The schema
+   strings in `backend/database.py` are the source of truth: on boot the app
+   parses them, compares against the live columns, and issues the missing
+   `ALTER TABLE ... ADD COLUMN`s on both SQLite and Postgres. Adding a column to
+   `SCHEMA` and `PG_SCHEMA` is therefore the entire migration - a `git push` and
+   Render's auto-deploy applies it. New columns arrive nullable, since existing
+   rows have no value for them.
+3. Ensures a session signing key exists. If `SECRET_KEY` is not set in the
+   environment, a random one is generated and stored in the `app_settings`
+   table - never a hard-coded default, which would be public in this repo. The
+   stored key is reused on every later boot, so restarts and redeploys do not
+   log anyone out.
+
+Deploys that only change columns therefore need no SQL console work. Renaming or
+dropping a column, or changing its type, is *not* automatic and still needs a
+hand-written statement.
 
 ## Default login
 

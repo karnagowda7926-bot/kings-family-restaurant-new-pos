@@ -15,14 +15,13 @@ from flask import Flask, request, jsonify, session, send_from_directory, redirec
 from flask_cors import CORS
 from werkzeug.security import check_password_hash
 
-from database import get_db, init_db, next_bill_number
+from database import get_db, get_or_create_secret_key, init_db, next_bill_number
 from print_service import print_receipt as send_receipt_to_printer
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 FRONTEND_DIR = os.path.join(BASE_DIR, "..", "frontend")
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY", "king-family-restaurant-dev-secret-change-me")
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 
@@ -40,7 +39,13 @@ CORS(app, supports_credentials=True)
 
 # Ensure the schema exists and seed data is present on every boot. This is
 # idempotent and matters for WSGI servers (gunicorn) that never run __main__.
+# It also adds any column the schema gained since the database was created, so
+# a plain "git push" deploy needs no manual migration step.
 init_db()
+
+# Must follow init_db(): with no SECRET_KEY in the environment the key is read
+# from (or generated into) the app_settings table, which init_db() creates.
+app.secret_key = get_or_create_secret_key()
 
 
 # =========================================================
